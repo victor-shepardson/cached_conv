@@ -8,6 +8,7 @@ from .convs import (Branches, CachedConv1d, CachedConvTranspose1d,
                     CachedPadding1d, CachedSequential)
 from .convs import Conv1d as _Conv1d
 from .convs import ConvTranspose1d as _ConvTranspose1d
+from .convs import CausalConvTranspose1d as _CausalConvTranspose1d
 from .convs import get_padding
 
 USE_BUFFER_CONV = False
@@ -40,11 +41,14 @@ def Conv1d(*args, **kwargs):
         return _Conv1d(*args, **kwargs)
 
 
-def ConvTranspose1d(*args, **kwargs):
+def ConvTranspose1d(*args, causal=False, **kwargs):
     if USE_BUFFER_CONV:
         return CachedConvTranspose1d(*args, **kwargs)
     else:
-        return _ConvTranspose1d(*args, **kwargs)
+        if causal:
+            return _CausalConvTranspose1d(*args, **kwargs)
+        else:
+            return _ConvTranspose1d(*args, **kwargs)
 
 
 def AlignBranches(*args, **kwargs):

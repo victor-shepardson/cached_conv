@@ -24,8 +24,7 @@ def get_padding(kernel_size, stride=1, dilation=1, mode="centered"):
         either "centered", "causal" or "anticausal"
     """
     if kernel_size == 1: return (0, 0)
-    p = (kernel_size - 1) * dilation + 1
-    half_p = p // 2
+    p = (kernel_size - 1) * dilation + 1 - (stride-1)
     if mode == "centered":
         p_right = p // 2
         p_left = (p - 1) // 2
@@ -143,6 +142,30 @@ class CachedConv1d(nn.Conv1d):
             self.dilation,
             self.groups,
         )
+
+
+class CausalConvTranspose1d(torch.nn.ConvTranspose1d):
+    """
+    Transposed Conv with asymmetrical padding.
+    """
+    def __init__(self, in_channels, out_channels, kernel_size, stride, **kw):
+        kw.pop('padding', 0)
+        if kw.get('dilation', 1)!=1:
+            raise NotImplementedError('dilation not implemented')
+        if kw.get('output_padding', 0)!=0:
+            print('CausalConvTranspose1d: output_padding is not tested')
+        if kw.get('padding_mode', 'zeros')!='zeros':
+            raise NotImplementedError('only zero-padding is implemented')
+        if kernel_size//stride != kernel_size/stride:
+            raise ValueError('kernel_size should be a multiple of stride')
+        k = kernel_size
+        s = stride
+        super().__init__(in_channels, out_channels, k, s, padding=k-s, **kw)
+        self.pad = torch.nn.ConstantPad1d(((k-s)//s, 0), 0)
+
+    def forward(self, x):
+        x = self.pad(x)
+        return super().forward(x)
 
 
 class CachedConvTranspose1d(nn.ConvTranspose1d):
