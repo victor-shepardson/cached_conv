@@ -161,11 +161,21 @@ class CausalConvTranspose1d(torch.nn.ConvTranspose1d):
         k = kernel_size
         s = stride
         super().__init__(in_channels, out_channels, k, s, padding=k-s, **kw)
-        self.pad = torch.nn.ConstantPad1d(((k-s)//s, 0), 0)
+        self.pad = torch.nn.ConstantPad1d(((k-s)//s, 0), 0.0)
 
     def forward(self, x):
         x = self.pad(x)
-        return super().forward(x)
+        # return super().forward(x)
+        return nn.functional.conv_transpose1d(
+            x,
+            self.weight,
+            self.bias,
+            self.stride,
+            self.padding,
+            self.output_padding,
+            self.groups,
+            self.dilation,
+        )
 
 
 class CachedConvTranspose1d(nn.ConvTranspose1d):
