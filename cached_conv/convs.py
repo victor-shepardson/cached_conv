@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 MAX_BATCH_SIZE = 64
-
+# MAX_BLOCK_SIZE = 2048
 
 def get_padding(kernel_size, stride=1, dilation=1, mode="centered"):
     """
@@ -76,26 +76,54 @@ class CachedPadding1d(nn.Module):
         self.initialized = 0
         self.padding = padding
         self.crop = crop
+        self.head = 0
+        self.max_block = 0
 
     @torch.jit.unused
     @torch.no_grad()
     def init_cache(self, x):
-        b, c, _ = x.shape
+        b, c, n = x.shape
+        self.max_block = n
+        # NOTE that the max block size is set when exporting
+        # allocate double the total padding plus block to make a circular buffer
         self.register_buffer(
             "pad",
-            torch.zeros(MAX_BATCH_SIZE, c, self.padding).to(x))
+            torch.zeros(MAX_BATCH_SIZE, c, (n+self.padding)*2).to(x))
         self.initialized += 1
+
+    def write(self, x, i:int):
+        b, c, n = x.shape
+        l = self.pad.shape[2]
+        if i+n <= l:
+            self.pad[:b, ..., i:i+n] = x
+        else:
+            self.pad[:b, ..., i:] = x[...,:l-i]
+            self.pad[:b, ..., :(i+n)%l] = x[...,l-i:]
 
     def forward(self, x):
         if not self.initialized:
             self.init_cache(x)
 
-        if self.padding:
-            x = torch.cat([self.pad[:x.shape[0]], x], -1)
-            self.pad[:x.shape[0]].copy_(x[..., -self.padding:])
+        p = self.padding # length of padding
+        if p:
+            l = self.pad.shape[2] # length of buffer
+            h = self.head # location of write heads
+            b, c, n = x.shape # length of block
+            if n > self.max_block:
+                raise ValueError(' '.join(('max block',str(n),str(self.max_block))))
+
+            self.write(x, h)
+            self.write(x, (h+l//2)%l)
+
+            s = (h - p)%(l//2)
+            # sweet reward: return a view of the pre-allocated buffer
+            x = self.pad[:b,:,s:s+p+n]
+            # print('n', n, 's', s, 'p', p, 'l', l, x.shape)
+
+            self.head = (h + n)%l
 
             if self.crop:
-                x = x[..., :-self.padding]
+                x = x[..., :-p]
 
         return x
 
