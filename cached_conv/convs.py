@@ -106,6 +106,7 @@ class CachedConv1d(nn.Conv1d):
     """
 
     def __init__(self, *args, **kwargs):
+        self.positive = kwargs.get("positive", False)
         padding = kwargs.get("padding", 0)
         cumulative_delay = kwargs.pop("cumulative_delay", 0)
 
@@ -133,9 +134,12 @@ class CachedConv1d(nn.Conv1d):
     def forward(self, x):
         x = self.downsampling_delay(x)
         x = self.cache(x)
+        weight = self.weight
+        if self.positive:
+            weight = weight.softmax(-1)
         return nn.functional.conv1d(
             x,
-            self.weight,
+            weight,
             self.bias,
             self.stride,
             self.padding,
