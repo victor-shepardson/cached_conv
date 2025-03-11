@@ -36,7 +36,7 @@ def get_padding(kernel_size, stride=1, dilation=1, mode="centered"):
         p_left = 0
     else:
         raise Exception(f"Padding mode {mode} is not valid")
-    return (p_left, p_right)
+    return (max(0,p_left), max(0,p_right))
 
 
 class CachedSequential(nn.Sequential):
